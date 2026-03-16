@@ -6,7 +6,7 @@
     {
       "id": "0",
       "version": 1,
-      "title": "Nordtrell KYC Dashboard",
+      "title": "Nordtrell KYC",
       "widgets": [
         {
           "version": 1,
@@ -21,6 +21,113 @@
           "settings": {
             "type": "table",
             "query": "MATCH (c:Customer)\nWITH count(c) AS customers\nMATCH (acc:Account:Internal)\nWITH customers, count(acc) AS accounts\nMATCH (t:Transaction)\nRETURN\n  customers          AS `Customers`,\n  accounts           AS `Internal Accounts`,\n  count(t)           AS `Transactions`,\n  round(sum(t.amount)) AS `Total Volume`",
+            "databaseName": "neo4j",
+            "actions": [],
+            "version": 1,
+            "richRenderCells": false,
+            "enableRecordsDownload": false
+          }
+        },
+        {
+          "version": 1,
+          "title": "Alert Summary",
+          "w": 4,
+          "h": 4,
+          "x": 0,
+          "y": 9,
+          "meta": {
+            "latestCypherQueries": []
+          },
+          "settings": {
+            "type": "table",
+            "query": "MATCH (s:Scenario)-[:HAS_ALERT]->(a:Alert)-[:HAS_STATUS]->(st:AlertStatus)\nRETURN s.name AS Scenario, st.status AS Status, count(a) AS Alerts\nORDER BY Scenario, Status",
+            "databaseName": "neo4j",
+            "actions": [],
+            "version": 1,
+            "richRenderCells": false,
+            "enableRecordsDownload": false
+          }
+        },
+        {
+          "version": 1,
+          "title": "Alert Aging",
+          "w": 4,
+          "h": 4,
+          "x": 4,
+          "y": 9,
+          "meta": {
+            "latestCypherQueries": []
+          },
+          "settings": {
+            "type": "table",
+            "query": "MATCH (a:Alert)-[:HAS_STATUS]->(st:AlertStatus)\nWITH a, st, duration.between(datetime(a.createdDate), datetime()).days AS age\nWITH a, st,\n  CASE\n    WHEN age <= 7  THEN '00-07 days'\n    WHEN age <= 14 THEN '08-14 days'\n    WHEN age <= 21 THEN '15-21 days'\n    WHEN age <= 28 THEN '22-28 days'\n    ELSE '29+ days - SLA Risk'\n  END AS Age_Bucket\nRETURN\n  Age_Bucket,\n  count(a) AS Total_Alerts,\n  count(CASE WHEN st.status = '01-New' THEN 1 END) AS New,\n  count(CASE WHEN st.status <> '01-New' THEN 1 END) AS In_Progress\nORDER BY Age_Bucket",
+            "databaseName": "neo4j",
+            "actions": [],
+            "version": 1,
+            "richRenderCells": false,
+            "enableRecordsDownload": false
+          }
+        },
+        {
+          "version": 1,
+          "title": "All Alerts",
+          "w": 4,
+          "h": 4,
+          "x": 8,
+          "y": 9,
+          "meta": {
+            "latestCypherQueries": []
+          },
+          "settings": {
+            "type": "table",
+            "query": "MATCH (s:Scenario)-[:HAS_ALERT]->(a:Alert)-[:ON]->(c:Customer)\nMATCH (a)-[:HAS_STATUS]->(st:AlertStatus)\nRETURN\n  a.alertId       AS Alert_ID,\n  s.name          AS Scenario,\n  c.customerID    AS Customer_ID,\n  c.name          AS Customer_Name,\n  st.status       AS Status,\n  duration.between(datetime(a.createdDate), datetime()).days AS Days_Open\nORDER BY Days_Open DESC, Scenario, Status, Alert_ID",
+            "databaseName": "neo4j",
+            "actions": [
+              {
+                "id": "96d020b3-2301-4cdb-b6",
+                "triggerType": "ON_CELL_CLICK",
+                "columnName": "Customer_ID",
+                "actions": [
+                  {
+                    "id": "2482398a-9dab-4088-9e",
+                    "type": "SET_PARAMETER",
+                    "config": {
+                      "parameterName": "neodash_customer_id",
+                      "source": {
+                        "mode": "COLUMN_VALUE",
+                        "columnName": "Customer_ID"
+                      }
+                    }
+                  },
+                  {
+                    "id": "80401601-5183-4284-96",
+                    "type": "NAVIGATE",
+                    "config": {
+                      "navigationType": "DASHBOARD_PAGE",
+                      "dashboardPageId": "5"
+                    }
+                  }
+                ]
+              }
+            ],
+            "version": 1,
+            "richRenderCells": false,
+            "enableRecordsDownload": false
+          }
+        },
+        {
+          "version": 1,
+          "title": "Risk Indicators",
+          "w": 4,
+          "h": 4,
+          "x": 8,
+          "y": 5,
+          "meta": {
+            "latestCypherQueries": []
+          },
+          "settings": {
+            "type": "table",
+            "query": "MATCH (c1:Customer)-[:HAS_ACCOUNT]->(:Account)-[:PERFORMS]->\n  (:Transaction)-[:BENEFITS_TO]->(:Account:HighRiskJurisdiction)\nWITH count(DISTINCT c1) AS hrjCustomers\nMATCH (c2:Customer)-[:SHARED_IDENTIFIERS]->(:Customer)\nRETURN\n  hrjCustomers                AS `Customers with HRJ Transfers`,\n  count(DISTINCT c2)          AS `Customers with Shared Identifiers`",
             "databaseName": "neo4j",
             "actions": [],
             "version": 1,
@@ -75,26 +182,6 @@
             "richRenderCells": false,
             "enableRecordsDownload": false
           }
-        },
-        {
-          "version": 1,
-          "title": "Risk Indicators",
-          "w": 4,
-          "h": 4,
-          "x": 8,
-          "y": 5,
-          "meta": {
-            "latestCypherQueries": []
-          },
-          "settings": {
-            "type": "table",
-            "query": "MATCH (c1:Customer)-[:HAS_ACCOUNT]->(:Account)-[:PERFORMS]->\n  (:Transaction)-[:BENEFITS_TO]->(:Account:HighRiskJurisdiction)\nWITH count(DISTINCT c1) AS hrjCustomers\nMATCH (c2:Customer)-[:SHARED_IDENTIFIERS]->(:Customer)\nRETURN\n  hrjCustomers                AS `Customers with HRJ Transfers`,\n  count(DISTINCT c2)          AS `Customers with Shared Identifiers`",
-            "databaseName": "neo4j",
-            "actions": [],
-            "version": 1,
-            "richRenderCells": true,
-            "enableRecordsDownload": false
-          }
         }
       ]
     },
@@ -103,6 +190,102 @@
       "version": 1,
       "title": "Circular Movements",
       "widgets": [
+        {
+          "version": 1,
+          "title": "Circular Movements Information",
+          "w": 12,
+          "h": 2,
+          "x": 0,
+          "y": 0,
+          "meta": {},
+          "settings": {
+            "version": 1,
+            "type": "text",
+            "markdown": "*Circular movement* is a technique used in money laundering and other reportable activity; money is moved from one account to another until the funds have returned to the original account. Often, a small percentage of the funds are retained at each step as a fee for performing the service."
+          }
+        },
+        {
+          "version": 1,
+          "title": "Cases",
+          "w": 5,
+          "h": 6,
+          "x": 0,
+          "y": 2,
+          "meta": {
+            "latestCypherQueries": [
+              {
+                "query": "MATCH (a:Account)-[f:PERFORMS]->(first_tx:Transaction)\nMATCH path=(a)-[f]->(first_tx)\n\t(\n\t(tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)\n     WHERE tx_i.date < tx_j.date\n     AND tx_i.amount >= tx_j.amount >= 0.80 * tx_i.amount\n  \t){2,15}\n  (last_tx:Transaction)-[:BENEFITS_TO]->(a)\nWHERE COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} =\n\tsize([a] + a_i)\nOPTIONAL MATCH (c:Customer)-[:HAS_ACCOUNT]->(a)\nRETURN c.customerID AS Customer_ID, a.accountNumber as Initial_Account, apoc.number.format(first_tx.amount, \"#,##0.00\") as Total_In, COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} as Num_Actors\norder by Num_Actors desc",
+                "origin": "user"
+              },
+              {
+                "query": "MATCH (a:Account)-[f:PERFORMS]->(first_tx:Transaction)\nMATCH path=(a)-[f]->(first_tx)\n\t(\n\t(tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)\n     WHERE tx_i.date < tx_j.date\n     AND tx_i.amount >= tx_j.amount >= 0.80 * tx_i.amount\n  \t){2,15}\n  (last_tx:Transaction)-[:BENEFITS_TO]->(a)\nWHERE COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} =\n\tsize([a] + a_i)\nRETURN a.accountNumber as InitialAccount, COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} as ringSize",
+                "origin": "user"
+              },
+              {
+                "query": "MATCH (a:Account)-[f:PERFORMS]->(first_tx:Transaction)\nMATCH path=(a)-[f]->(first_tx)\n\t(\n\t(tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)\n     WHERE tx_i.date < tx_j.date\n     AND tx_i.amount >= tx_j.amount >= 0.80 * tx_i.amount\n  \t){2,15}\n  (last_tx:Transaction)-[:BENEFITS_TO]->(a)\nWHERE COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} =\n\tsize([a] + a_i)\nRETURN a.accountNumber as \"Initial Account\", COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} as ringSize",
+                "origin": "user"
+              },
+              {
+                "query": "MATCH (a:Account)-[f:PERFORMS]->(first_tx:Transaction)\nMATCH path=(a)-[f]->(first_tx)\n\t(\n\t(tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)\n     WHERE tx_i.date < tx_j.date\n     AND tx_i.amount >= tx_j.amount >= 0.80 * tx_i.amount\n  \t){2,15}\n  (last_tx:Transaction)-[:BENEFITS_TO]->(a)\nWHERE COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} =\n\tsize([a] + a_i)\nRETURN COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} as ringSize, a.accountNumber as EntryAccount",
+                "origin": "user"
+              }
+            ]
+          },
+          "settings": {
+            "type": "table",
+            "query": "MATCH (a:Account)-[f:PERFORMS]->(first_tx:Transaction)\nMATCH path=(a)-[f]->(first_tx)\n\t(\n\t(tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)\n     WHERE tx_i.date < tx_j.date\n     AND tx_i.amount >= tx_j.amount >= 0.80 * tx_i.amount\n  \t){2,15}\n  (last_tx:Transaction)-[:BENEFITS_TO]->(a)\nWHERE COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} =\n\tsize([a] + a_i)\nOPTIONAL MATCH (c:Customer)-[:HAS_ACCOUNT]->(a)\nRETURN c.customerID AS Customer_ID, c.name as Name, a.accountNumber as Initial_Account, apoc.number.format(first_tx.amount, \"#,##0.00\") as Total_In, COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} as Num_Actors\norder by Num_Actors desc",
+            "databaseName": "neo4j",
+            "actions": [
+              {
+                "id": "EeElJqj4gg7K0ZKo8HqBz",
+                "triggerType": "ON_CELL_CLICK",
+                "columnName": "Customer_ID",
+                "actions": [
+                  {
+                    "id": "iLpW4cww5jKoQQtthlTd7",
+                    "type": "SET_PARAMETER",
+                    "config": {
+                      "parameterName": "neodash_customer_id",
+                      "source": {
+                        "mode": "COLUMN_VALUE",
+                        "columnName": "Customer_ID"
+                      }
+                    }
+                  },
+                  {
+                    "id": "Vgr-tG-YvLXpv14UBg-k6",
+                    "type": "NAVIGATE",
+                    "config": {
+                      "navigationType": "DASHBOARD_PAGE",
+                      "dashboardPageId": "5"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "dc9vkyXBMuhy-jBlhP_ON",
+                "triggerType": "ON_CELL_CLICK",
+                "columnName": "Initial_Account",
+                "actions": [
+                  {
+                    "id": "oWldkpSz_4-18TTItrBgz",
+                    "type": "SET_PARAMETER",
+                    "config": {
+                      "parameterName": "neodash_initial_account",
+                      "source": {
+                        "mode": "COLUMN_VALUE",
+                        "columnName": "Initial_Account"
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "version": 1,
+            "richRenderCells": false,
+            "enableRecordsDownload": true
+          }
+        },
         {
           "version": 1,
           "title": "Movement Details",
@@ -136,7 +319,7 @@
           },
           "settings": {
             "type": "graph",
-            "query": "MATCH (a:Account {accountNumber: $initial_account})-[f:PERFORMS]->(first_tx:Transaction)\nMATCH path=(a)-[f]->(first_tx)\n      (\n        (tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)\n        WHERE tx_i.date < tx_j.date\n        AND tx_i.amount >= tx_j.amount >= 0.80 * tx_i.amount\n      ){2,15}\n      (last_tx:Transaction)-[:BENEFITS_TO]->(a)\nWHERE COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} = size([a] + a_i)\nreturn path",
+            "query": "MATCH (a:Account {accountNumber: $neodash_initial_account})-[f:PERFORMS]->(first_tx:Transaction)\nMATCH path=(a)-[f]->(first_tx)\n      (\n        (tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)\n        WHERE tx_i.date < tx_j.date\n        AND tx_i.amount >= tx_j.amount >= 0.80 * tx_i.amount\n      ){2,15}\n      (last_tx:Transaction)-[:BENEFITS_TO]->(a)\nWHERE COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} = size([a] + a_i)\nreturn path",
             "databaseName": "neo4j",
             "version": 2,
             "enableSidePanel": true,
@@ -146,96 +329,89 @@
             },
             "enableDownloadImage": true
           }
-        },
-        {
-          "version": 1,
-          "title": "Circular Movements Information",
-          "w": 12,
-          "h": 2,
-          "x": 0,
-          "y": 0,
-          "meta": {},
-          "settings": {
-            "version": 1,
-            "type": "text",
-            "markdown": "*Circular movement* is a technique used in money laundering and other reportable activity; money is moved from one account to another until the funds have returned to the original account. Often, a small percentage of the funds are retained at each step as a fee for performing the service."
-          }
-        },
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "version": 1,
+      "title": "High Risk Transfers",
+      "widgets": [
         {
           "version": 1,
           "title": "Cases",
           "w": 5,
-          "h": 6,
+          "h": 7,
           "x": 0,
           "y": 2,
           "meta": {
             "latestCypherQueries": [
               {
-                "query": "MATCH (a:Account)-[f:PERFORMS]->(first_tx:Transaction)\nMATCH path=(a)-[f]->(first_tx)\n\t(\n\t(tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)\n     WHERE tx_i.date < tx_j.date\n     AND tx_i.amount >= tx_j.amount >= 0.80 * tx_i.amount\n  \t){2,15}\n  (last_tx:Transaction)-[:BENEFITS_TO]->(a)\nWHERE COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} =\n\tsize([a] + a_i)\nOPTIONAL MATCH (c:Customer)-[:HAS_ACCOUNT]->(a)\nRETURN c.customerID AS Customer_ID, c.name as Name, a.accountNumber as Initial_Account, apoc.number.format(first_tx.amount, \"#,##0.00\") as Total_In, COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} as Num_Actors\norder by Num_Actors desc",
+                "query": "WITH datetime('2024-08-22') as dt\nMATCH (l:Account)-[:PERFORMS]->(last_t:Transaction)-[:BENEFITS_TO]->(hrj:HighRiskJurisdiction)\nWHERE last_t.date >= dt\nWITH l, hrj, SUM(last_t.amount) AS total_hrj_transctions, dt\nMATCH path=(first)((a1)-[:PERFORMS]->(t)-[:BENEFITS_TO]->(a2)\nWHERE COLLECT {\n       WITH a1, a2\n       MATCH (a1)-[:PERFORMS]->(some_t)-[:BENEFITS_TO]->(a2)\n       WHERE some_t.date >= dt\n       WITH SUM(some_t.amount) AS s\n       RETURN 0.9 * total_hrj_transctions <= s <= 1.1 * total_hrj_transctions\n   } = [TRUE]\n)*(l)-[:PERFORMS]->(tx:Transaction)-[:BENEFITS_TO]->(hrj)\n   WHERE NOT EXISTS {\n       WITH first\n       MATCH (before)-[:PERFORMS]->(tx)-[:BENEFITS_TO]->(first)\n       WHERE tx.date >= dt\n       WITH SUM(tx.amount) AS sx, before\n       WHERE 0.9 * total_hrj_transctions <= sx <= 1.1 * total_hrj_transctions\n       RETURN before\n   } AND\n   tx.date >= dt\nOPTIONAL MATCH (c:Customer)-[:HAS_ACCOUNT]->(l)\nwhere c is not null\nRETURN distinct c.customerID AS Customer_ID, c.name as Name, l.accountNumber as Account, total_hrj_transctions as Amt_At_Risk\norder by Amt_At_Risk desc",
                 "origin": "user"
               },
               {
-                "query": "MATCH (a:Account)-[f:PERFORMS]->(first_tx:Transaction)\nMATCH path=(a)-[f]->(first_tx)\n\t(\n\t(tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)\n     WHERE tx_i.date < tx_j.date\n     AND tx_i.amount >= tx_j.amount >= 0.80 * tx_i.amount\n  \t){2,15}\n  (last_tx:Transaction)-[:BENEFITS_TO]->(a)\nWHERE COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} =\n\tsize([a] + a_i)\nOPTIONAL MATCH (c:Customer)-[:HAS_ACCOUNT]->(a)\nRETURN c.customerID AS Customer_ID, c.name, a.accountNumber as Initial_Account, apoc.number.format(first_tx.amount, \"#,##0.00\") as Total_In, COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} as Num_Actors\norder by Num_Actors desc",
+                "query": "WITH datetime('2024-08-22') as dt\nMATCH (l:Account)-[:PERFORMS]->(last_t:Transaction)-[:BENEFITS_TO]->(hrj:HighRiskJurisdiction)\nWHERE last_t.date >= dt\nWITH l, hrj, SUM(last_t.amount) AS total_hrj_transctions, dt\nMATCH path=(first)((a1)-[:PERFORMS]->(t)-[:BENEFITS_TO]->(a2)\nWHERE COLLECT {\n       WITH a1, a2\n       MATCH (a1)-[:PERFORMS]->(some_t)-[:BENEFITS_TO]->(a2)\n       WHERE some_t.date >= dt\n       WITH SUM(some_t.amount) AS s\n       RETURN 0.9 * total_hrj_transctions <= s <= 1.1 * total_hrj_transctions\n   } = [TRUE]\n)*(l)-[:PERFORMS]->(tx:Transaction)-[:BENEFITS_TO]->(hrj)\n   WHERE NOT EXISTS {\n       WITH first\n       MATCH (before)-[:PERFORMS]->(tx)-[:BENEFITS_TO]->(first)\n       WHERE tx.date >= dt\n       WITH SUM(tx.amount) AS sx, before\n       WHERE 0.9 * total_hrj_transctions <= sx <= 1.1 * total_hrj_transctions\n       RETURN before\n   } AND\n   tx.date >= dt\nOPTIONAL MATCH (c:Customer)-[:HAS_ACCOUNT]->(l)\nwhere CustomerID is not null\nRETURN distinct c.customerID AS Customer_ID, c.name as Name, l.accountNumber as Account, total_hrj_transctions as Amt_At_Risk\norder by Amt_At_Risk desc",
                 "origin": "user"
               },
               {
-                "query": "MATCH (a:Account)-[f:PERFORMS]->(first_tx:Transaction)\nMATCH path=(a)-[f]->(first_tx)\n\t(\n\t(tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)\n     WHERE tx_i.date < tx_j.date\n     AND tx_i.amount >= tx_j.amount >= 0.80 * tx_i.amount\n  \t){2,15}\n  (last_tx:Transaction)-[:BENEFITS_TO]->(a)\nWHERE COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} =\n\tsize([a] + a_i)\nRETURN a.accountNumber as InitialAccount, COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} as ringSize",
+                "query": "WITH datetime('2024-08-22') as dt\nMATCH (l:Account)-[:PERFORMS]->(last_t:Transaction)-[:BENEFITS_TO]->(hrj:HighRiskJurisdiction)\nWHERE last_t.date >= dt\nWITH l, hrj, SUM(last_t.amount) AS total_hrj_transctions, dt\nMATCH path=(first)((a1)-[:PERFORMS]->(t)-[:BENEFITS_TO]->(a2)\nWHERE COLLECT {\n       WITH a1, a2\n       MATCH (a1)-[:PERFORMS]->(some_t)-[:BENEFITS_TO]->(a2)\n       WHERE some_t.date >= dt\n       WITH SUM(some_t.amount) AS s\n       RETURN 0.9 * total_hrj_transctions <= s <= 1.1 * total_hrj_transctions\n   } = [TRUE]\n)*(l)-[:PERFORMS]->(tx:Transaction)-[:BENEFITS_TO]->(hrj)\n   WHERE NOT EXISTS {\n       WITH first\n       MATCH (before)-[:PERFORMS]->(tx)-[:BENEFITS_TO]->(first)\n       WHERE tx.date >= dt\n       WITH SUM(tx.amount) AS sx, before\n       WHERE 0.9 * total_hrj_transctions <= sx <= 1.1 * total_hrj_transctions\n       RETURN before\n   } AND\n   tx.date >= dt\nOPTIONAL MATCH (c:Customer)-[:HAS_ACCOUNT]->(l)\nRETURN distinct c.customerID AS Customer_ID, c.name as Name, l.accountNumber as Account, total_hrj_transctions as Amt_At_Risk\nwhere CustomerID is not null\norder by Amt_At_Risk desc",
                 "origin": "user"
               },
               {
-                "query": "MATCH (a:Account)-[f:PERFORMS]->(first_tx:Transaction)\nMATCH path=(a)-[f]->(first_tx)\n\t(\n\t(tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)\n     WHERE tx_i.date < tx_j.date\n     AND tx_i.amount >= tx_j.amount >= 0.80 * tx_i.amount\n  \t){2,15}\n  (last_tx:Transaction)-[:BENEFITS_TO]->(a)\nWHERE COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} =\n\tsize([a] + a_i)\nRETURN a.accountNumber as \"Initial Account\", COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} as ringSize",
+                "query": "WITH datetime('2024-08-22') as dt\nMATCH (l:Account)-[:PERFORMS]->(last_t:Transaction)-[:BENEFITS_TO]->(hrj:HighRiskJurisdiction)\nWHERE last_t.date >= dt\nWITH l, hrj, SUM(last_t.amount) AS total_hrj_transctions, dt\nMATCH path=(first)((a1)-[:PERFORMS]->(t)-[:BENEFITS_TO]->(a2)\nWHERE COLLECT {\n       WITH a1, a2\n       MATCH (a1)-[:PERFORMS]->(some_t)-[:BENEFITS_TO]->(a2)\n       WHERE some_t.date >= dt\n       WITH SUM(some_t.amount) AS s\n       RETURN 0.9 * total_hrj_transctions <= s <= 1.1 * total_hrj_transctions\n   } = [TRUE]\n)*(l)-[:PERFORMS]->(tx:Transaction)-[:BENEFITS_TO]->(hrj)\n   WHERE NOT EXISTS {\n       WITH first\n       MATCH (before)-[:PERFORMS]->(tx)-[:BENEFITS_TO]->(first)\n       WHERE tx.date >= dt\n       WITH SUM(tx.amount) AS sx, before\n       WHERE 0.9 * total_hrj_transctions <= sx <= 1.1 * total_hrj_transctions\n       RETURN before\n   } AND\n   tx.date >= dt\nRETURN l.accountNumber as Account, apoc.number.format(total_hrj_transctions, \"#,##0.00\") as Amt",
                 "origin": "user"
               },
               {
-                "query": "MATCH (a:Account)-[f:PERFORMS]->(first_tx:Transaction)\nMATCH path=(a)-[f]->(first_tx)\n\t(\n\t(tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)\n     WHERE tx_i.date < tx_j.date\n     AND tx_i.amount >= tx_j.amount >= 0.80 * tx_i.amount\n  \t){2,15}\n  (last_tx:Transaction)-[:BENEFITS_TO]->(a)\nWHERE COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} =\n\tsize([a] + a_i)\nRETURN COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} as ringSize, a.accountNumber as EntryAccount",
+                "query": "WITH datetime('2024-08-22') as dt\nMATCH (l:Account)-[:PERFORMS]->(last_t:Transaction)-[:BENEFITS_TO]->(hrj:HighRiskJurisdiction)\nWHERE last_t.date >= dt\nWITH l, hrj, SUM(last_t.amount) AS total_hrj_transctions, dt\nMATCH path=(first)((a1)-[:PERFORMS]->(t)-[:BENEFITS_TO]->(a2)\nWHERE COLLECT {\n       WITH a1, a2\n       MATCH (a1)-[:PERFORMS]->(some_t)-[:BENEFITS_TO]->(a2)\n       WHERE some_t.date >= dt\n       WITH SUM(some_t.amount) AS s\n       RETURN 0.9 * total_hrj_transctions <= s <= 1.1 * total_hrj_transctions\n   } = [TRUE]\n)*(l)-[:PERFORMS]->(tx:Transaction)-[:BENEFITS_TO]->(hrj)\n   WHERE NOT EXISTS {\n       WITH first\n       MATCH (before)-[:PERFORMS]->(tx)-[:BENEFITS_TO]->(first)\n       WHERE tx.date >= dt\n       WITH SUM(tx.amount) AS sx, before\n       WHERE 0.9 * total_hrj_transctions <= sx <= 1.1 * total_hrj_transctions\n       RETURN before\n   } AND\n   tx.date >= dt\nRETURN l.accountNumber as Account, apoc.number.format(first.amount, \"#,##0.00\") as Amt",
                 "origin": "user"
               }
             ]
           },
           "settings": {
             "type": "table",
-            "query": "MATCH (a:Account)-[f:PERFORMS]->(first_tx:Transaction)\nMATCH path=(a)-[f]->(first_tx)\n\t(\n\t(tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)\n     WHERE tx_i.date < tx_j.date\n     AND tx_i.amount >= tx_j.amount >= 0.80 * tx_i.amount\n  \t){2,15}\n  (last_tx:Transaction)-[:BENEFITS_TO]->(a)\nWHERE COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} =\n\tsize([a] + a_i)\nOPTIONAL MATCH (c:Customer)-[:HAS_ACCOUNT]->(a)\nRETURN c.customerID AS ID, c.name as Name, a.accountNumber as Initial_Account, apoc.number.format(first_tx.amount, \"#,##0.00\") as Total_In, COUNT {WITH a, a_i UNWIND [a] + a_i AS b RETURN DISTINCT b} as Num_Actors\norder by Num_Actors desc",
+            "query": "WITH datetime('2024-08-22') as dt\nMATCH (l:Account)-[:PERFORMS]->(last_t:Transaction)-[:BENEFITS_TO]->(hrj:HighRiskJurisdiction)\nWHERE last_t.date >= dt\nWITH l, hrj, SUM(last_t.amount) AS total_hrj_transctions, dt\nMATCH path=(first)((a1)-[:PERFORMS]->(t)-[:BENEFITS_TO]->(a2)\nWHERE COLLECT {\n       WITH a1, a2\n       MATCH (a1)-[:PERFORMS]->(some_t)-[:BENEFITS_TO]->(a2)\n       WHERE some_t.date >= dt\n       WITH SUM(some_t.amount) AS s\n       RETURN 0.9 * total_hrj_transctions <= s <= 1.1 * total_hrj_transctions\n   } = [TRUE]\n)*(l)-[:PERFORMS]->(tx:Transaction)-[:BENEFITS_TO]->(hrj)\n   WHERE NOT EXISTS {\n       WITH first\n       MATCH (before)-[:PERFORMS]->(tx)-[:BENEFITS_TO]->(first)\n       WHERE tx.date >= dt\n       WITH SUM(tx.amount) AS sx, before\n       WHERE 0.9 * total_hrj_transctions <= sx <= 1.1 * total_hrj_transctions\n       RETURN before\n   } AND\n   tx.date >= dt\n MATCH (c:Customer)-[:HAS_ACCOUNT]->(l)\nRETURN distinct c.customerID AS ID, c.name as Name, l.accountNumber as Account, total_hrj_transctions as Amt_At_Risk\norder by Amt_At_Risk desc",
             "databaseName": "neo4j",
             "actions": [
               {
-                "id": "EeElJqj4gg7K0ZKo8HqBz",
+                "id": "Gtpk-46xg2WfkjnwaKBF7",
                 "triggerType": "ON_CELL_CLICK",
-                "columnName": "ID",
+                "columnName": "Customer_ID",
                 "actions": [
                   {
-                    "id": "iLpW4cww5jKoQQtthlTd7",
+                    "id": "zYgFSsy6w4e_HQ4KuR8Gs",
                     "type": "SET_PARAMETER",
                     "config": {
                       "parameterName": "neodash_customer_id",
                       "source": {
                         "mode": "COLUMN_VALUE",
-                        "columnName": "ID"
+                        "columnName": "Customer_ID"
                       }
                     }
                   },
                   {
-                    "id": "Vgr-tG-YvLXpv14UBg-k6",
+                    "id": "5y3gEbUlBY-ouL6AY4BEl",
                     "type": "NAVIGATE",
                     "config": {
                       "navigationType": "DASHBOARD_PAGE",
-                      "dashboardPageId": "3"
+                      "dashboardPageId": "5"
                     }
                   }
                 ]
               },
               {
-                "id": "d3x1QsMw5Nj8JehhGTEGn",
+                "id": "JCnng5MTvazBuDN_01SAb",
                 "triggerType": "ON_CELL_CLICK",
-                "columnName": "Initial_Account",
+                "columnName": "Account",
                 "actions": [
                   {
-                    "id": "jrc-xFZrPF9PVfp7qsvOA",
+                    "id": "gbln90yPRIvHneNGQXt6R",
                     "type": "SET_PARAMETER",
                     "config": {
-                      "parameterName": "initial_account",
+                      "parameterName": "neodash_hrj",
                       "source": {
                         "mode": "COLUMN_VALUE",
-                        "columnName": "Initial_Account"
+                        "columnName": "Account"
                       }
                     }
                   }
@@ -246,14 +422,7 @@
             "richRenderCells": false,
             "enableRecordsDownload": true
           }
-        }
-      ]
-    },
-    {
-      "id": "2",
-      "version": 1,
-      "title": "High Risk Transfers",
-      "widgets": [
+        },
         {
           "version": 1,
           "title": " High Risk Transfers Information",
@@ -311,82 +480,151 @@
             },
             "enableDownloadImage": true
           }
-        },
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "version": 1,
+      "title": "Structuring",
+      "widgets": [
         {
           "version": 1,
           "title": "Cases",
-          "w": 5,
+          "w": 12,
           "h": 7,
           "x": 0,
           "y": 2,
           "meta": {
-            "latestCypherQueries": [
-              {
-                "query": "WITH datetime('2024-08-22') as dt\nMATCH (l:Account)-[:PERFORMS]->(last_t:Transaction)-[:BENEFITS_TO]->(hrj:HighRiskJurisdiction)\nWHERE last_t.date >= dt\nWITH l, hrj, SUM(last_t.amount) AS total_hrj_transctions, dt\nMATCH path=(first)((a1)-[:PERFORMS]->(t)-[:BENEFITS_TO]->(a2)\nWHERE COLLECT {\n       WITH a1, a2\n       MATCH (a1)-[:PERFORMS]->(some_t)-[:BENEFITS_TO]->(a2)\n       WHERE some_t.date >= dt\n       WITH SUM(some_t.amount) AS s\n       RETURN 0.9 * total_hrj_transctions <= s <= 1.1 * total_hrj_transctions\n   } = [TRUE]\n)*(l)-[:PERFORMS]->(tx:Transaction)-[:BENEFITS_TO]->(hrj)\n   WHERE NOT EXISTS {\n       WITH first\n       MATCH (before)-[:PERFORMS]->(tx)-[:BENEFITS_TO]->(first)\n       WHERE tx.date >= dt\n       WITH SUM(tx.amount) AS sx, before\n       WHERE 0.9 * total_hrj_transctions <= sx <= 1.1 * total_hrj_transctions\n       RETURN before\n   } AND\n   tx.date >= dt\n MATCH (c:Customer)-[:HAS_ACCOUNT]->(l)\nRETURN distinct c.customerID AS ID, c.name as Name, l.accountNumber as Account, total_hrj_transctions as Amt_At_Risk\norder by Amt_At_Risk desc",
-                "origin": "user"
-              },
-              {
-                "query": "WITH datetime('2024-08-22') as dt\nMATCH (l:Account)-[:PERFORMS]->(last_t:Transaction)-[:BENEFITS_TO]->(hrj:HighRiskJurisdiction)\nWHERE last_t.date >= dt\nWITH l, hrj, SUM(last_t.amount) AS total_hrj_transctions, dt\nMATCH path=(first)((a1)-[:PERFORMS]->(t)-[:BENEFITS_TO]->(a2)\nWHERE COLLECT {\n       WITH a1, a2\n       MATCH (a1)-[:PERFORMS]->(some_t)-[:BENEFITS_TO]->(a2)\n       WHERE some_t.date >= dt\n       WITH SUM(some_t.amount) AS s\n       RETURN 0.9 * total_hrj_transctions <= s <= 1.1 * total_hrj_transctions\n   } = [TRUE]\n)*(l)-[:PERFORMS]->(tx:Transaction)-[:BENEFITS_TO]->(hrj)\n   WHERE NOT EXISTS {\n       WITH first\n       MATCH (before)-[:PERFORMS]->(tx)-[:BENEFITS_TO]->(first)\n       WHERE tx.date >= dt\n       WITH SUM(tx.amount) AS sx, before\n       WHERE 0.9 * total_hrj_transctions <= sx <= 1.1 * total_hrj_transctions\n       RETURN before\n   } AND\n   tx.date >= dt\n MATCH (c:Customer)-[:HAS_ACCOUNT]->(l)\nRETURN distinct c.customerID AS ID, c.name as Name, l.accountNumber as Account, total_hrj_transctions as Amt_At_Risk",
-                "origin": "user"
-              },
-              {
-                "query": "WITH datetime('2024-08-22') as dt\nMATCH (l:Account)-[:PERFORMS]->(last_t:Transaction)-[:BENEFITS_TO]->(hrj:HighRiskJurisdiction)\nWHERE last_t.date >= dt\nWITH l, hrj, SUM(last_t.amount) AS total_hrj_transctions, dt\nMATCH path=(first)((a1)-[:PERFORMS]->(t)-[:BENEFITS_TO]->(a2)\nWHERE COLLECT {\n       WITH a1, a2\n       MATCH (a1)-[:PERFORMS]->(some_t)-[:BENEFITS_TO]->(a2)\n       WHERE some_t.date >= dt\n       WITH SUM(some_t.amount) AS s\n       RETURN 0.9 * total_hrj_transctions <= s <= 1.1 * total_hrj_transctions\n   } = [TRUE]\n)*(l)-[:PERFORMS]->(tx:Transaction)-[:BENEFITS_TO]->(hrj)\n   WHERE NOT EXISTS {\n       WITH first\n       MATCH (before)-[:PERFORMS]->(tx)-[:BENEFITS_TO]->(first)\n       WHERE tx.date >= dt\n       WITH SUM(tx.amount) AS sx, before\n       WHERE 0.9 * total_hrj_transctions <= sx <= 1.1 * total_hrj_transctions\n       RETURN before\n   } AND\n   tx.date >= dt\n MATCH (c:Customer)-[:HAS_ACCOUNT]->(l)\nRETURN c.customerID AS ID, c.name as Name, l.accountNumber as Account, total_hrj_transctions as Amt_At_Risk",
-                "origin": "user"
-              },
-              {
-                "query": "WITH datetime('2024-08-22') as dt\nMATCH (l:Account)-[:PERFORMS]->(last_t:Transaction)-[:BENEFITS_TO]->(hrj:HighRiskJurisdiction)\nWHERE last_t.date >= dt\nWITH l, hrj, SUM(last_t.amount) AS total_hrj_transctions, dt\nMATCH path=(first)((a1)-[:PERFORMS]->(t)-[:BENEFITS_TO]->(a2)\nWHERE COLLECT {\n       WITH a1, a2\n       MATCH (a1)-[:PERFORMS]->(some_t)-[:BENEFITS_TO]->(a2)\n       WHERE some_t.date >= dt\n       WITH SUM(some_t.amount) AS s\n       RETURN 0.9 * total_hrj_transctions <= s <= 1.1 * total_hrj_transctions\n   } = [TRUE]\n)*(l)-[:PERFORMS]->(tx:Transaction)-[:BENEFITS_TO]->(hrj)\n   WHERE NOT EXISTS {\n       WITH first\n       MATCH (before)-[:PERFORMS]->(tx)-[:BENEFITS_TO]->(first)\n       WHERE tx.date >= dt\n       WITH SUM(tx.amount) AS sx, before\n       WHERE 0.9 * total_hrj_transctions <= sx <= 1.1 * total_hrj_transctions\n       RETURN before\n   } AND\n   tx.date >= dt\n MATCH (c:Customer)-[:HAS_ACCOUNT]->(l)\nRETURN c.customerID AS Customer_ID, l.accountNumber as Account, total_hrj_transctions as Amt_At_Risk",
-                "origin": "user"
-              },
-              {
-                "query": "WITH datetime('2024-08-22') as dt\nMATCH (l:Account)-[:PERFORMS]->(last_t:Transaction)-[:BENEFITS_TO]->(hrj:HighRiskJurisdiction)\nWHERE last_t.date >= dt\nWITH l, hrj, SUM(last_t.amount) AS total_hrj_transctions, dt\nMATCH path=(first)((a1)-[:PERFORMS]->(t)-[:BENEFITS_TO]->(a2)\nWHERE COLLECT {\n       WITH a1, a2\n       MATCH (a1)-[:PERFORMS]->(some_t)-[:BENEFITS_TO]->(a2)\n       WHERE some_t.date >= dt\n       WITH SUM(some_t.amount) AS s\n       RETURN 0.9 * total_hrj_transctions <= s <= 1.1 * total_hrj_transctions\n   } = [TRUE]\n)*(l)-[:PERFORMS]->(tx:Transaction)-[:BENEFITS_TO]->(hrj)\n   WHERE NOT EXISTS {\n       WITH first\n       MATCH (before)-[:PERFORMS]->(tx)-[:BENEFITS_TO]->(first)\n       WHERE tx.date >= dt\n       WITH SUM(tx.amount) AS sx, before\n       WHERE 0.9 * total_hrj_transctions <= sx <= 1.1 * total_hrj_transctions\n       RETURN before\n   } AND\n   tx.date >= dt\nOPTIONAL MATCH (c:Customer)-[:HAS_ACCOUNT]->(l)\nRETURN c.customerID AS Customer_ID, l.accountNumber as Account, total_hrj_transctions as Amt_At_Risk\nwhere c.Customer_ID is not null",
-                "origin": "user"
-              }
-            ]
+            "latestCypherQueries": []
           },
           "settings": {
             "type": "table",
-            "query": "WITH datetime('2024-08-22') as dt\nMATCH (l:Account)-[:PERFORMS]->(last_t:Transaction)-[:BENEFITS_TO]->(hrj:HighRiskJurisdiction)\nWHERE last_t.date >= dt\nWITH l, hrj, SUM(last_t.amount) AS total_hrj_transctions, dt\nMATCH path=(first)((a1)-[:PERFORMS]->(t)-[:BENEFITS_TO]->(a2)\nWHERE COLLECT {\n       WITH a1, a2\n       MATCH (a1)-[:PERFORMS]->(some_t)-[:BENEFITS_TO]->(a2)\n       WHERE some_t.date >= dt\n       WITH SUM(some_t.amount) AS s\n       RETURN 0.9 * total_hrj_transctions <= s <= 1.1 * total_hrj_transctions\n   } = [TRUE]\n)*(l)-[:PERFORMS]->(tx:Transaction)-[:BENEFITS_TO]->(hrj)\n   WHERE NOT EXISTS {\n       WITH first\n       MATCH (before)-[:PERFORMS]->(tx)-[:BENEFITS_TO]->(first)\n       WHERE tx.date >= dt\n       WITH SUM(tx.amount) AS sx, before\n       WHERE 0.9 * total_hrj_transctions <= sx <= 1.1 * total_hrj_transctions\n       RETURN before\n   } AND\n   tx.date >= dt\n MATCH (c:Customer)-[:HAS_ACCOUNT]->(l)\nRETURN distinct c.customerID AS ID, c.name as Name, l.accountNumber as Account, total_hrj_transctions as Amt_At_Risk\norder by Amt_At_Risk desc",
+            "query": "MATCH (acc:Account:Internal)-[:PERFORMS]->(t:Transaction)\nWITH acc, t ORDER BY t.date\nWITH acc, collect(t) AS txns\nUNWIND range(0, size(txns)-2) AS i\nWITH acc, txns[i] AS anchor,\n     [tx IN txns\n      WHERE tx.date >= txns[i].date\n        AND tx.date <= txns[i].date + duration({days:30})\n        AND tx.amount < 10000] AS window\nWHERE size(window) >= 2\n  AND reduce(s=0.0, tx IN window | s + tx.amount) >= 10000\nWITH acc, anchor, window,\n     round(reduce(s=0.0, tx IN window | s + tx.amount)) AS windowTotal\nOPTIONAL MATCH (c:Customer)-[:HAS_ACCOUNT]->(acc)\nRETURN\n  c.customerID      AS Customer_ID,\n  c.name            AS Customer_Name,\n  acc.accountNumber AS Account,\n  size(window)      AS Transaction_Count,\n  windowTotal       AS Window_Total,\n  anchor.date       AS Window_Start\nORDER BY windowTotal DESC",
             "databaseName": "neo4j",
             "actions": [
               {
-                "id": "Gtpk-46xg2WfkjnwaKBF7",
+                "id": "3373b36d-fb76-4416-a5",
                 "triggerType": "ON_CELL_CLICK",
-                "columnName": "ID",
+                "columnName": "Customer_ID",
                 "actions": [
                   {
-                    "id": "zYgFSsy6w4e_HQ4KuR8Gs",
+                    "id": "4add1a13-d8bb-4e4e-90",
                     "type": "SET_PARAMETER",
                     "config": {
                       "parameterName": "neodash_customer_id",
                       "source": {
                         "mode": "COLUMN_VALUE",
-                        "columnName": "ID"
+                        "columnName": "Customer_ID"
                       }
                     }
                   },
                   {
-                    "id": "5y3gEbUlBY-ouL6AY4BEl",
+                    "id": "70051145-2167-4bbd-9e",
                     "type": "NAVIGATE",
                     "config": {
                       "navigationType": "DASHBOARD_PAGE",
-                      "dashboardPageId": "3"
+                      "dashboardPageId": "5"
                     }
                   }
                 ]
-              },
+              }
+            ],
+            "version": 1,
+            "richRenderCells": false,
+            "enableRecordsDownload": false
+          }
+        },
+        {
+          "version": 1,
+          "title": " ",
+          "w": 12,
+          "h": 2,
+          "x": 0,
+          "y": 0,
+          "meta": {
+            "latestCypherQueries": []
+          },
+          "settings": {
+            "version": 1,
+            "type": "text",
+            "markdown": "*Structuring* (smurfing): multiple sub-threshold transactions in a 30-day window that collectively exceed 10,000. Click a Customer ID to view their full profile."
+          }
+        }
+      ]
+    },
+    {
+      "id": "4",
+      "version": 1,
+      "title": "Counterparty Concentration",
+      "widgets": [
+        {
+          "version": 1,
+          "title": "Counterparty Network",
+          "w": 7,
+          "h": 7,
+          "x": 5,
+          "y": 2,
+          "meta": {
+            "latestCypherQueries": []
+          },
+          "settings": {
+            "type": "graph",
+            "query": "MATCH (ext:Account {accountNumber: $neodash_ext_account})\nMATCH (acc:Account:Internal)-[p:PERFORMS]->(t:Transaction)-[b:BENEFITS_TO]->(ext)\nOPTIONAL MATCH (c:Customer)-[ha:HAS_ACCOUNT]->(acc)\nRETURN c, ha, acc, p, t, b, ext",
+            "databaseName": "neo4j",
+            "version": 2,
+            "enableSidePanel": true,
+            "enableContextMenu": true,
+            "layout": {
+              "type": "d3Force"
+            },
+            "enableDownloadImage": true
+          }
+        },
+        {
+          "version": 1,
+          "title": " ",
+          "w": 12,
+          "h": 2,
+          "x": 0,
+          "y": 0,
+          "meta": {
+            "latestCypherQueries": []
+          },
+          "settings": {
+            "version": 1,
+            "type": "text",
+            "markdown": "*Counterparty concentration*: external accounts receiving funds from multiple unrelated internal customers. Click a row to load the network graph."
+          }
+        },
+        {
+          "version": 1,
+          "title": "Concentration Cases",
+          "w": 5,
+          "h": 7,
+          "x": 0,
+          "y": 2,
+          "meta": {
+            "latestCypherQueries": []
+          },
+          "settings": {
+            "type": "table",
+            "query": "MATCH (c:Customer)-[:HAS_ACCOUNT]->(acc:Account:Internal)\nMATCH (acc)-[:PERFORMS]->(t:Transaction)-[:BENEFITS_TO]->(ext:Account)\nWHERE NOT ext:Internal\nWITH ext, count(DISTINCT c) AS sourceCustomers,\n     count(t) AS totalTxns,\n     round(sum(t.amount)) AS totalAmt\nWHERE sourceCustomers >= 2\nRETURN\n  ext.accountNumber AS External_Account,\n  CASE WHEN ext:HighRiskJurisdiction THEN 'YES' ELSE 'NO' END AS High_Risk_Jurisdiction,\n  sourceCustomers   AS Source_Customers,\n  totalTxns         AS Total_Transactions,\n  totalAmt          AS Total_Amount\nORDER BY sourceCustomers DESC, totalAmt DESC",
+            "databaseName": "neo4j",
+            "actions": [
               {
-                "id": "N9KBgQ99rury9t8b3a_Zq",
+                "id": "e867d42e-edb5-48c3-9b",
                 "triggerType": "ON_CELL_CLICK",
-                "columnName": "Account",
+                "columnName": "External_Account",
                 "actions": [
                   {
-                    "id": "ZIlDliKncAmKAnkotI7k4",
+                    "id": "dd11f338-e72c-4f84-90",
                     "type": "SET_PARAMETER",
                     "config": {
-                      "parameterName": "neodash_hrj",
+                      "parameterName": "neodash_ext_account",
                       "source": {
                         "mode": "COLUMN_VALUE",
-                        "columnName": "Account"
+                        "columnName": "External_Account"
                       }
                     }
                   }
@@ -395,16 +633,56 @@
             ],
             "version": 1,
             "richRenderCells": false,
-            "enableRecordsDownload": true
+            "enableRecordsDownload": false
           }
         }
       ]
     },
     {
-      "id": "3",
+      "id": "5",
       "version": 1,
       "title": "Customer 360",
       "widgets": [
+        {
+          "version": 1,
+          "title": "Risk Flags",
+          "w": 4,
+          "h": 6,
+          "x": 8,
+          "y": 13,
+          "meta": {
+            "latestCypherQueries": []
+          },
+          "settings": {
+            "type": "table",
+            "query": "MATCH (c:Customer {customerID: $neodash_customer_id})-[:HAS_ACCOUNT]->(acc:Account)\nOPTIONAL MATCH (acc)-[:PERFORMS]->(first_tx:Transaction)\n  ((tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)){1,14}\n  (last_tx:Transaction)-[:BENEFITS_TO]->(acc)\nWITH acc, count(first_tx) AS circularTxns\nOPTIONAL MATCH (acc)-[:PERFORMS]->(t2:Transaction)-[:BENEFITS_TO]->(:Account:HighRiskJurisdiction)\nWITH acc, circularTxns, count(DISTINCT t2) AS hrjConnections\nRETURN\n  acc.accountNumber AS `Account`,\n  CASE WHEN circularTxns > 0 THEN 'YES' ELSE 'NO' END AS `Fraud Ring Involvement`,\n  hrjConnections AS `High-Risk Jurisdiction Links`\nORDER BY `Fraud Ring Involvement` DESC, `High-Risk Jurisdiction Links` DESC",
+            "databaseName": "neo4j",
+            "actions": [],
+            "version": 1,
+            "richRenderCells": false,
+            "enableRecordsDownload": true
+          }
+        },
+        {
+          "version": 1,
+          "title": "Alerts",
+          "w": 12,
+          "h": 3,
+          "x": 0,
+          "y": 19,
+          "meta": {
+            "latestCypherQueries": []
+          },
+          "settings": {
+            "type": "table",
+            "query": "MATCH (a:Alert)-[:ON]->(c:Customer {customerID: $neodash_customer_id})\nMATCH (s:Scenario)-[:HAS_ALERT]->(a)\nMATCH (a)-[:HAS_STATUS]->(st:AlertStatus)\nRETURN a.alertId AS Alert_ID, s.name AS Scenario, st.status AS Status\nORDER BY st.status, a.alertId",
+            "databaseName": "neo4j",
+            "actions": [],
+            "version": 1,
+            "richRenderCells": true,
+            "enableRecordsDownload": false
+          }
+        },
         {
           "version": 1,
           "title": "Shared Identifiers",
@@ -430,22 +708,72 @@
         },
         {
           "version": 1,
-          "title": "Risk Flags",
-          "w": 4,
+          "title": "Transaction Network",
+          "w": 6,
           "h": 6,
-          "x": 8,
-          "y": 13,
+          "x": 0,
+          "y": 7,
+          "meta": {
+            "latestCypherQueries": []
+          },
+          "settings": {
+            "type": "graph",
+            "query": "MATCH (c:Customer {customerID: $neodash_customer_id})-[ha:HAS_ACCOUNT]->(acc:Account)\nMATCH (acc)-[p:PERFORMS]->(t:Transaction)-[b:BENEFITS_TO]->(dest:Account)\nRETURN c, ha, acc, p, t, b, dest",
+            "databaseName": "neo4j",
+            "version": 2,
+            "enableSidePanel": true,
+            "enableContextMenu": true,
+            "layout": {
+              "type": "d3Force"
+            },
+            "enableDownloadImage": true
+          }
+        },
+        {
+          "version": 1,
+          "title": "Community",
+          "w": 4,
+          "h": 2,
+          "x": 0,
+          "y": 0,
           "meta": {
             "latestCypherQueries": []
           },
           "settings": {
             "type": "table",
-            "query": "MATCH (c:Customer {customerID: $neodash_customer_id})-[:HAS_ACCOUNT]->(acc:Account)\nOPTIONAL MATCH (acc)-[:PERFORMS]->(first_tx:Transaction)\n  ((tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)){1,14}\n  (last_tx:Transaction)-[:BENEFITS_TO]->(acc)\nWITH acc, count(first_tx) AS circularTxns\nOPTIONAL MATCH (acc)-[:PERFORMS]->(t2:Transaction)-[:BENEFITS_TO]->(:Account:HighRiskJurisdiction)\nWITH acc, circularTxns, count(DISTINCT t2) AS hrjConnections\nRETURN\n  acc.accountNumber AS `Account`,\n  CASE WHEN circularTxns > 0 THEN 'YES' ELSE 'NO' END AS `Fraud Ring Involvement`,\n  hrjConnections AS `High-Risk Jurisdiction Links`\nORDER BY `Fraud Ring Involvement` DESC, `High-Risk Jurisdiction Links` DESC",
+            "query": "MATCH (c:Customer {customerID: $neodash_customer_id})\nRETURN c.louvainCommunity AS Community_ID",
             "databaseName": "neo4j",
-            "actions": [],
+            "actions": [
+              {
+                "id": "3f365953-1fe2-46c9-ba04-239720b14446",
+                "triggerType": "ON_CELL_CLICK",
+                "columnName": "Community_ID",
+                "actions": [
+                  {
+                    "id": "c7dc94b4-a4a2-452b-9db0-8243b0d92854",
+                    "type": "SET_PARAMETER",
+                    "config": {
+                      "parameterName": "neodash_community_id",
+                      "source": {
+                        "mode": "COLUMN_VALUE",
+                        "columnName": "Community_ID"
+                      }
+                    }
+                  },
+                  {
+                    "id": "8d9baa83-a10f-47f3-821d-79b640289fe6",
+                    "type": "NAVIGATE",
+                    "config": {
+                      "navigationType": "DASHBOARD_PAGE",
+                      "dashboardPageId": "6"
+                    }
+                  }
+                ]
+              }
+            ],
             "version": 1,
             "richRenderCells": false,
-            "enableRecordsDownload": true
+            "enableRecordsDownload": false
           }
         },
         {
@@ -490,96 +818,6 @@
         },
         {
           "version": 1,
-          "title": "Community",
-          "w": 4,
-          "h": 2,
-          "x": 0,
-          "y": 0,
-          "meta": {
-            "latestCypherQueries": []
-          },
-          "settings": {
-            "type": "table",
-            "query": "MATCH (c:Customer {customerID: $neodash_customer_id})\nRETURN c.louvainCommunity AS Community_ID",
-            "databaseName": "neo4j",
-            "actions": [
-              {
-                "id": "3f365953-1fe2-46c9-ba04-239720b14446",
-                "triggerType": "ON_CELL_CLICK",
-                "columnName": "Community_ID",
-                "actions": [
-                  {
-                    "id": "c7dc94b4-a4a2-452b-9db0-8243b0d92854",
-                    "type": "SET_PARAMETER",
-                    "config": {
-                      "parameterName": "neodash_community_id",
-                      "source": {
-                        "mode": "COLUMN_VALUE",
-                        "columnName": "Community_ID"
-                      }
-                    }
-                  },
-                  {
-                    "id": "8d9baa83-a10f-47f3-821d-79b640289fe6",
-                    "type": "NAVIGATE",
-                    "config": {
-                      "navigationType": "DASHBOARD_PAGE",
-                      "dashboardPageId": "4"
-                    }
-                  }
-                ]
-              }
-            ],
-            "version": 1,
-            "richRenderCells": false,
-            "enableRecordsDownload": false
-          }
-        },
-        {
-          "version": 1,
-          "title": "Transaction Network",
-          "w": 6,
-          "h": 6,
-          "x": 0,
-          "y": 7,
-          "meta": {
-            "latestCypherQueries": []
-          },
-          "settings": {
-            "type": "graph",
-            "query": "MATCH (c:Customer {customerID: $neodash_customer_id})-[ha:HAS_ACCOUNT]->(acc:Account)\nMATCH (acc)-[p:PERFORMS]->(t:Transaction)-[b:BENEFITS_TO]->(dest:Account)\nRETURN c, ha, acc, p, t, b, dest",
-            "databaseName": "neo4j",
-            "version": 2,
-            "enableSidePanel": true,
-            "enableContextMenu": true,
-            "layout": {
-              "type": "d3Force"
-            },
-            "enableDownloadImage": true
-          }
-        },
-        {
-          "version": 1,
-          "title": "Alerts",
-          "w": 12,
-          "h": 3,
-          "x": 0,
-          "y": 19,
-          "meta": {
-            "latestCypherQueries": []
-          },
-          "settings": {
-            "type": "table",
-            "query": "MATCH (a:Alert)-[:ON]->(c:Customer {customerID: $neodash_customer_id})\nMATCH (s:Scenario)-[:HAS_ALERT]->(a)\nMATCH (a)-[:HAS_STATUS]->(st:AlertStatus)\nRETURN a.alertId AS Alert_ID, s.name AS Scenario, st.status AS Status\nORDER BY st.status, a.alertId",
-            "databaseName": "neo4j",
-            "actions": [],
-            "version": 1,
-            "richRenderCells": false,
-            "enableRecordsDownload": false
-          }
-        },
-        {
-          "version": 1,
           "title": "Accounts",
           "w": 8,
           "h": 5,
@@ -591,26 +829,6 @@
           "settings": {
             "type": "table",
             "query": "MATCH (c:Customer {customerID: $neodash_customer_id})-[:HAS_ACCOUNT]->(acc:Account)\nOPTIONAL MATCH (acc)-[:PERFORMS]->(t:Transaction)\nRETURN\n  acc.accountNumber AS `Account Number`,\n  count(t)          AS `Transactions Sent`,\n  sum(t.amount)     AS `Total Sent`,\n  min(t.date)       AS `First Activity`,\n  max(t.date)       AS `Last Activity`\nORDER BY `Total Sent` DESC",
-            "databaseName": "neo4j",
-            "actions": [],
-            "version": 1,
-            "richRenderCells": false,
-            "enableRecordsDownload": true
-          }
-        },
-        {
-          "version": 1,
-          "title": "Summary Stats",
-          "w": 8,
-          "h": 2,
-          "x": 4,
-          "y": 0,
-          "meta": {
-            "latestCypherQueries": []
-          },
-          "settings": {
-            "type": "table",
-            "query": "MATCH (c:Customer {customerID: $neodash_customer_id})-[:HAS_ACCOUNT]->(acc:Account)\nOPTIONAL MATCH (acc)-[:PERFORMS]->(t:Transaction)\nOPTIONAL MATCH (c)-[:SHARED_IDENTIFIERS]-(related:Customer)\nRETURN\n  count(DISTINCT acc)     AS `Accounts`,\n  count(DISTINCT t)       AS `Total Transactions`,\n  sum(t.amount)           AS `Total Volume`,\n  min(t.date)             AS `First Transaction`,\n  max(t.date)             AS `Last Transaction`,\n  count(DISTINCT related) AS `Linked Customers`",
             "databaseName": "neo4j",
             "actions": [],
             "version": 1,
@@ -637,13 +855,33 @@
             "richRenderCells": false,
             "enableRecordsDownload": true
           }
+        },
+        {
+          "version": 1,
+          "title": "Summary Stats",
+          "w": 8,
+          "h": 2,
+          "x": 4,
+          "y": 0,
+          "meta": {
+            "latestCypherQueries": []
+          },
+          "settings": {
+            "type": "table",
+            "query": "MATCH (c:Customer {customerID: $neodash_customer_id})-[:HAS_ACCOUNT]->(acc:Account)\nOPTIONAL MATCH (acc)-[:PERFORMS]->(t:Transaction)\nOPTIONAL MATCH (c)-[:SHARED_IDENTIFIERS]-(related:Customer)\nRETURN\n  count(DISTINCT acc)     AS `Accounts`,\n  count(DISTINCT t)       AS `Total Transactions`,\n  sum(t.amount)           AS `Total Volume`,\n  min(t.date)             AS `First Transaction`,\n  max(t.date)             AS `Last Transaction`,\n  count(DISTINCT related) AS `Linked Customers`",
+            "databaseName": "neo4j",
+            "actions": [],
+            "version": 1,
+            "richRenderCells": false,
+            "enableRecordsDownload": true
+          }
         }
       ]
     },
     {
-      "id": "4",
+      "id": "6",
       "version": 1,
-      "title": "High-Risk Customer Network",
+      "title": "Community Analysis",
       "widgets": [
         {
           "version": 1,
@@ -670,22 +908,22 @@
         },
         {
           "version": 1,
-          "title": "Customer Risk Leaderboard",
-          "w": 6,
-          "h": 7,
-          "x": 0,
-          "y": 2,
+          "title": "Community Summary",
+          "w": 9,
+          "h": 2,
+          "x": 3,
+          "y": 0,
           "meta": {
             "latestCypherQueries": []
           },
           "settings": {
             "type": "table",
-            "query": "MATCH (c:Customer {louvainCommunity: $neodash_community_id})-[:HAS_ACCOUNT]->(acc:Account)\nWITH c, acc,\n  COUNT { MATCH (acc)-[:PERFORMS]->(:Transaction)-[:BENEFITS_TO]->(:Account:HighRiskJurisdiction) } AS hrjTxns,\n  COUNT {\n    MATCH (acc)-[:PERFORMS]->(first_tx:Transaction)\n      ((tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)){1,14}\n      (last_tx:Transaction)-[:BENEFITS_TO]->(acc)\n  } AS circularPaths\nWITH c, sum(hrjTxns) AS totalHrjTxns, sum(circularPaths) AS totalCircular\nRETURN\n  c.customerID AS `Customer ID`,\n  c.name AS `Name`,\n  round(c.pagerank, 4) AS `PageRank`,\n  round(c.betweenness, 2) AS `Betweenness`,\n  totalHrjTxns AS `HRJ Txns`,\n  CASE WHEN totalCircular > 0 THEN 'YES' ELSE 'NO' END AS `Fraud Ring`\nORDER BY `HRJ Txns` DESC, `Betweenness` DESC",
+            "query": "MATCH (c:Customer {louvainCommunity: $neodash_community_id})-[:HAS_ACCOUNT]->(acc:Account)\nRETURN\n  count(DISTINCT c) AS `Members`,\n  round(avg(c.pagerank), 4) AS `Avg PageRank`,\n  round(avg(c.betweenness), 2) AS `Avg Betweenness`,\n  count(DISTINCT CASE WHEN (acc)-[:PERFORMS]->(:Transaction)\n    -[:BENEFITS_TO]->(:Account:HighRiskJurisdiction) THEN c END)\n    AS `Members with HRJ Transfers`",
             "databaseName": "neo4j",
             "actions": [],
             "version": 1,
             "richRenderCells": false,
-            "enableRecordsDownload": true
+            "enableRecordsDownload": false
           }
         },
         {
@@ -710,51 +948,31 @@
         },
         {
           "version": 1,
-          "title": "Community Summary",
-          "w": 9,
-          "h": 2,
-          "x": 3,
-          "y": 0,
+          "title": "Customer Risk Leaderboard",
+          "w": 6,
+          "h": 7,
+          "x": 0,
+          "y": 2,
           "meta": {
             "latestCypherQueries": []
           },
           "settings": {
             "type": "table",
-            "query": "MATCH (c:Customer {louvainCommunity: $neodash_community_id})-[:HAS_ACCOUNT]->(acc:Account)\nRETURN\n  count(DISTINCT c) AS `Members`,\n  round(avg(c.pagerank), 4) AS `Avg PageRank`,\n  round(avg(c.betweenness), 2) AS `Avg Betweenness`,\n  count(DISTINCT CASE WHEN (acc)-[:PERFORMS]->(:Transaction)\n    -[:BENEFITS_TO]->(:Account:HighRiskJurisdiction) THEN c END)\n    AS `Members with HRJ Transfers`",
+            "query": "MATCH (c:Customer {louvainCommunity: $neodash_community_id})-[:HAS_ACCOUNT]->(acc:Account)\nWITH c, acc,\n  COUNT { MATCH (acc)-[:PERFORMS]->(:Transaction)-[:BENEFITS_TO]->(:Account:HighRiskJurisdiction) } AS hrjTxns,\n  COUNT {\n    MATCH (acc)-[:PERFORMS]->(first_tx:Transaction)\n      ((tx_i:Transaction)-[:BENEFITS_TO]->(a_i:Account)-[:PERFORMS]->(tx_j:Transaction)){1,14}\n      (last_tx:Transaction)-[:BENEFITS_TO]->(acc)\n  } AS circularPaths\nWITH c, sum(hrjTxns) AS totalHrjTxns, sum(circularPaths) AS totalCircular\nRETURN\n  c.customerID AS `Customer ID`,\n  c.name AS `Name`,\n  round(c.pagerank, 4) AS `PageRank`,\n  round(c.betweenness, 2) AS `Betweenness`,\n  totalHrjTxns AS `HRJ Transactions`,\n  CASE WHEN totalCircular > 0 THEN 'YES' ELSE 'NO' END AS `Fraud Ring`\nORDER BY `HRJ Transactions` DESC, `Betweenness` DESC",
             "databaseName": "neo4j",
             "actions": [],
             "version": 1,
             "richRenderCells": false,
-            "enableRecordsDownload": false
+            "enableRecordsDownload": true
           }
         }
       ]
     },
     {
-      "id": "5",
+      "id": "7",
       "version": 1,
-      "title": "Country & Jurisdiction Risk",
+      "title": "Jurisdiction Risk",
       "widgets": [
-        {
-          "version": 1,
-          "title": "Country Risk Summary",
-          "w": 4,
-          "h": 6,
-          "x": 8,
-          "y": 0,
-          "meta": {
-            "latestCypherQueries": []
-          },
-          "settings": {
-            "type": "table",
-            "query": "MATCH (co:Country)\nWHERE co.location IS NOT NULL\nOPTIONAL MATCH (c:Customer)-[:HAS_ADDRESS]->(:Address)\n  -[:LOCATED_IN]->(:Jurisdiction)-[:ASSOCIATED_WITH]->(co)\nWITH co,\n  CASE WHEN co.blackList = true THEN 'Blacklisted'\n       WHEN co.greyList = true THEN 'Greylisted'\n       ELSE 'Standard' END AS Status,\n  CASE WHEN co.blackList = true THEN 0\n       WHEN co.greyList = true THEN 1\n       ELSE 2 END AS sortKey,\n  count(DISTINCT c) AS Customers\nRETURN co.label_en AS Country, Status, Customers\nORDER BY sortKey, Customers DESC",
-            "databaseName": "neo4j",
-            "actions": [],
-            "version": 1,
-            "richRenderCells": false,
-            "enableRecordsDownload": false
-          }
-        },
         {
           "version": 1,
           "title": "Customers in High-Risk Countries",
@@ -791,7 +1009,7 @@
                     "type": "NAVIGATE",
                     "config": {
                       "navigationType": "DASHBOARD_PAGE",
-                      "dashboardPageId": "3"
+                      "dashboardPageId": "5"
                     }
                   }
                 ]
@@ -820,91 +1038,31 @@
             "mapStyle": "minimal",
             "geospatialProperties": []
           }
-        }
-      ]
-    },
-    {
-      "id": "6",
-      "version": 1,
-      "title": "Alert Management",
-      "widgets": [
+        },
         {
           "version": 1,
-          "title": "Alert Summary",
-          "w": 12,
-          "h": 3,
-          "x": 0,
+          "title": "Country Risk Summary",
+          "w": 4,
+          "h": 6,
+          "x": 8,
           "y": 0,
           "meta": {
             "latestCypherQueries": []
           },
           "settings": {
             "type": "table",
-            "query": "MATCH (s:Scenario)-[:HAS_ALERT]->(a:Alert)-[:HAS_STATUS]->(st:AlertStatus)\nRETURN s.name AS Scenario, st.status AS Status, count(a) AS Alerts\nORDER BY Scenario, Status",
+            "query": "MATCH (co:Country)\nWHERE co.location IS NOT NULL\nOPTIONAL MATCH (c:Customer)-[:HAS_ADDRESS]->(:Address)\n  -[:LOCATED_IN]->(:Jurisdiction)-[:ASSOCIATED_WITH]->(co)\nWITH co,\n  CASE WHEN co.blackList = true THEN 'Blacklisted'\n       WHEN co.greyList = true THEN 'Greylisted'\n       ELSE 'Standard' END AS Status,\n  CASE WHEN co.blackList = true THEN 0\n       WHEN co.greyList = true THEN 1\n       ELSE 2 END AS sortKey,\n  count(DISTINCT c) AS Customers\nRETURN co.label_en AS Country, Status, Customers\nORDER BY sortKey, Customers DESC",
             "databaseName": "neo4j",
             "actions": [],
             "version": 1,
             "richRenderCells": false,
             "enableRecordsDownload": false
           }
-        },
-        {
-          "version": 1,
-          "title": "All Alerts",
-          "w": 12,
-          "h": 8,
-          "x": 0,
-          "y": 3,
-          "meta": {
-            "latestCypherQueries": []
-          },
-          "settings": {
-            "type": "table",
-            "query": "MATCH (s:Scenario)-[:HAS_ALERT]->(a:Alert)-[:ON]->(c:Customer)\nMATCH (a)-[:HAS_STATUS]->(st:AlertStatus)\nRETURN\n  a.alertId       AS Alert_ID,\n  s.name          AS Scenario,\n  c.customerID    AS Customer_ID,\n  c.name          AS Customer_Name,\n  st.status       AS Status\nORDER BY Scenario, Status, Alert_ID",
-            "databaseName": "neo4j",
-            "actions": [
-              {
-                "id": "e89f2a569e004787b7421",
-                "triggerType": "ON_CELL_CLICK",
-                "columnName": "Customer_ID",
-                "actions": [
-                  {
-                    "id": "b97bc077cffc4046999c6",
-                    "type": "SET_PARAMETER",
-                    "config": {
-                      "parameterName": "neodash_customer_id",
-                      "source": {
-                        "mode": "COLUMN_VALUE",
-                        "columnName": "Customer_ID"
-                      }
-                    }
-                  },
-                  {
-                    "id": "dbb286b097804bdcb84d3",
-                    "type": "NAVIGATE",
-                    "config": {
-                      "navigationType": "DASHBOARD_PAGE",
-                      "dashboardPageId": "3"
-                    }
-                  }
-                ]
-              }
-            ],
-            "version": 1,
-            "richRenderCells": false,
-            "enableRecordsDownload": true
-          }
         }
       ]
     }
   ],
   "params": [
-    {
-      "version": 1,
-      "key": "initial_account",
-      "type": "string",
-      "initialValue": "9472407307"
-    },
     {
       "version": 1,
       "key": "neodash_customer_id",
@@ -918,8 +1076,19 @@
     },
     {
       "version": 1,
+      "key": "neodash_initial_account",
+      "type": "string",
+      "initialValue": "9472407307"
+    },
+    {
+      "version": 1,
       "key": "neodash_community_id",
       "initialValue": 62
+    },
+    {
+      "version": 1,
+      "key": "neodash_ext_account",
+      "initialValue": "0550921735"
     }
   ]
 }
